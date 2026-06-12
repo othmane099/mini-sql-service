@@ -11,6 +11,7 @@ from config import settings
 from connections.api import router as connections_router
 from containers import Container
 from log_config import configure_logging
+from queries.api import router as queries_router
 
 logger = structlog.get_logger()
 
@@ -26,7 +27,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 def create_app() -> FastAPI:
     container = Container()
-    container.wire(packages=["connections"])
+    container.wire(packages=["connections", "queries"])
 
     app = FastAPI(title=settings.PROJECT_NAME, debug=settings.is_debug, lifespan=lifespan)
     app.container = container  # type: ignore[attr-defined]
@@ -40,6 +41,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(connections_router, prefix="/api/v1")
+    app.include_router(queries_router, prefix="/api/v1")
 
     return app
 

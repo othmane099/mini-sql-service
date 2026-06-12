@@ -5,11 +5,13 @@ from dependency_injector import containers, providers
 from connections.introspector import PostgreSQLIntrospector
 from connections.service import ConnectionServiceImpl
 from db import db_resource
+from llm import create_llm
+from queries.service import QueryServiceImpl
 from uow import UnitOfWorkImpl
 
 
 class Container(containers.DeclarativeContainer):
-    wiring_config = containers.WiringConfiguration(packages=["connections"])
+    wiring_config = containers.WiringConfiguration(packages=["connections", "queries"])
 
     session_factory = providers.Resource(db_resource)
 
@@ -21,4 +23,12 @@ class Container(containers.DeclarativeContainer):
         ConnectionServiceImpl,
         unit_of_work=unit_of_work,
         introspector_factory=introspector_factory.provider,
+    )
+
+    llm = providers.Singleton(create_llm)
+
+    query_service = providers.Factory(
+        QueryServiceImpl,
+        connection_service=connection_service,
+        llm=llm,
     )

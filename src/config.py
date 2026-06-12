@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     DATABASE_POOL_TTL: int = 60 * 20
     DATABASE_POOL_PRE_PING: bool = True
 
+    LLM_API_KEY: str
+    LLM_ENDPOINT: str
+    LLM_API_VERSION: str
+    LLM_MODEL: str = "gpt-4o"
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     @property
