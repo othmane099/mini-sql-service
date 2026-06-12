@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Protocol
 
+from history.models import QueryEventType
 from history.schemas import QueryHistoryResponse
 from schemas import PaginatedResponse
 from uow import UnitOfWork
@@ -10,7 +11,11 @@ from uow import UnitOfWork
 
 class HistoryService(Protocol):
     async def list_by_connection(
-        self, connection_id: uuid.UUID, page: int, page_size: int
+        self,
+        connection_id: uuid.UUID,
+        page: int,
+        page_size: int,
+        event_type: QueryEventType | None = None,
     ) -> PaginatedResponse[QueryHistoryResponse]: ...
 
 
@@ -19,13 +24,17 @@ class HistoryServiceImpl:
         self._unit_of_work = unit_of_work
 
     async def list_by_connection(
-        self, connection_id: uuid.UUID, page: int, page_size: int
+        self,
+        connection_id: uuid.UUID,
+        page: int,
+        page_size: int,
+        event_type: QueryEventType | None = None,
     ) -> PaginatedResponse[QueryHistoryResponse]:
         offset = (page - 1) * page_size
         async with self._unit_of_work as uow:
-            total = await uow.history_repository.count_by_connection(connection_id)
+            total = await uow.history_repository.count_by_connection(connection_id, event_type)
             records = await uow.history_repository.list_by_connection(
-                connection_id, limit=page_size, offset=offset
+                connection_id, limit=page_size, offset=offset, event_type=event_type
             )
         items = [QueryHistoryResponse.model_validate(r) for r in records]
         return PaginatedResponse.build(items=items, total=total, page=page, page_size=page_size)

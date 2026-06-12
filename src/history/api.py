@@ -5,6 +5,7 @@ import uuid
 from dependency_injector.wiring import Provide, inject
 from fastapi import APIRouter, Depends, Query
 
+from history.models import QueryEventType
 from history.schemas import QueryHistoryResponse
 from history.service import HistoryService
 from schemas import PaginatedResponse
@@ -18,6 +19,9 @@ async def list_history(
     connection_id: uuid.UUID,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
+    event_type: QueryEventType | None = Query(default=None),
     service: HistoryService = Depends(Provide["history_service"]),
 ) -> PaginatedResponse[QueryHistoryResponse]:
-    return await service.list_by_connection(connection_id, page=page, page_size=page_size)
+    return await service.list_by_connection(
+        connection_id, page=page, page_size=page_size, event_type=event_type
+    )

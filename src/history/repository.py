@@ -6,15 +6,21 @@ from typing import Protocol
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from history.models import QueryHistory
+from history.models import QueryEventType, QueryHistory
 
 
 class HistoryRepository(Protocol):
     async def create(self, record: QueryHistory) -> QueryHistory: ...
     async def list_by_connection(
-        self, connection_id: uuid.UUID, limit: int, offset: int
+        self,
+        connection_id: uuid.UUID,
+        limit: int,
+        offset: int,
+        event_type: QueryEventType | None = None,
     ) -> list[QueryHistory]: ...
-    async def count_by_connection(self, connection_id: uuid.UUID) -> int: ...
+    async def count_by_connection(
+        self, connection_id: uuid.UUID, event_type: QueryEventType | None = None
+    ) -> int: ...
 
 
 class HistoryRepositoryImpl:
@@ -27,19 +33,29 @@ class HistoryRepositoryImpl:
         return record
 
     async def list_by_connection(
-        self, connection_id: uuid.UUID, limit: int, offset: int
+        self,
+        connection_id: uuid.UUID,
+        limit: int,
+        offset: int,
+        event_type: QueryEventType | None = None,
     ) -> list[QueryHistory]:
-        result = await self._session.execute(
+        query = (
             select(QueryHistory)
             .where(QueryHistory.connection_id == connection_id)
             .order_by(QueryHistory.created_at.desc())
             .limit(limit)
             .offset(offset)
         )
+        if event_type is not None:
+            query = query.where(QueryHistory.event_type == event_type)
+        result = await self._session.execute(query)
         return list(result.scalars().all())
 
-    async def count_by_connection(self, connection_id: uuid.UUID) -> int:
-        result = await self._session.execute(
-            select(func.count()).where(QueryHistory.connection_id == connection_id)
-        )
+    async def count_by_connection(
+        self, connection_id: uuid.UUID, event_type: QueryEventType | None = None
+    ) -> int:
+        query = select(func.count()).where(QueryHistory.connection_id == connection_id)
+        if event_type is not None:
+            query = query.where(QueryHistory.event_type == event_type)
+        result = await self._session.execute(query)
         return result.scalar_one()
