@@ -45,8 +45,6 @@ class PostgreSQLIntrospector:
                 return await conn.run_sync(self._read_sync)
         except OperationalError as exc:
             raise ConnectionFailedError(str(exc)) from exc
-        except ConnectionFailedError, IntrospectionError:
-            raise
         except Exception as exc:
             raise IntrospectionError(str(exc)) from exc
         finally:

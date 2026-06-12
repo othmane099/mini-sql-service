@@ -33,8 +33,6 @@ class PostgreSQLQueryExecutor:
                 return ExecuteResponse(columns=columns, rows=rows)
         except OperationalError as exc:
             raise ConnectionFailedError(str(exc)) from exc
-        except ConnectionFailedError, QueryExecutionError:
-            raise
         except Exception as exc:
             raise QueryExecutionError(str(exc)) from exc
         finally:

@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from config import settings
 from connections.api import router as connections_router
 from containers import Container
+from history.api import router as history_router
 from log_config import configure_logging
 from queries.api import router as queries_router
 
@@ -27,7 +28,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 def create_app() -> FastAPI:
     container = Container()
-    container.wire(packages=["connections", "queries"])
+    container.wire(packages=["connections", "queries", "history"])
 
     app = FastAPI(title=settings.PROJECT_NAME, debug=settings.is_debug, lifespan=lifespan)
     app.container = container  # type: ignore[attr-defined]
@@ -42,6 +43,7 @@ def create_app() -> FastAPI:
 
     app.include_router(connections_router, prefix="/api/v1")
     app.include_router(queries_router, prefix="/api/v1")
+    app.include_router(history_router, prefix="/api/v1")
 
     return app
 

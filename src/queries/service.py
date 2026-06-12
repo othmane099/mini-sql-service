@@ -9,9 +9,11 @@ from langchain_core.language_models import BaseChatModel
 
 from connections.models import Connection
 from connections.service import ConnectionService
+from history.models import QueryEventType, QueryHistory
 from queries.executor import QueryExecutor
 from queries.prompt import format_schema, sql_prompt
 from queries.schemas import ExecuteRequest, ExecuteResponse, QueryRequest, QueryResponse
+from uow import UnitOfWork
 
 logger = structlog.get_logger()
 
@@ -29,10 +31,12 @@ class QueryServiceImpl:
     def __init__(
         self,
         connection_service: ConnectionService,
+        unit_of_work: UnitOfWork,
         llm: BaseChatModel,
         executor_factory: Callable[[Connection], QueryExecutor],
     ) -> None:
         self._connection_service = connection_service
+        self._unit_of_work = unit_of_work
         self._llm = llm
         self._executor_factory = executor_factory
 
@@ -50,8 +54,19 @@ class QueryServiceImpl:
                 }
             ),
         )
+        async with self._unit_of_work as uow:
+            await uow.history_repository.create(
+                QueryHistory(
+                    connection_id=connection_id,
+                    event_type=QueryEventType.GENERATE,
+                    question=request.question,
+                    sql=result.sql,
+                    explanation=result.explanation,
+                )
+            )
+            await uow.commit()
         logger.info(
-            "query.executed",
+            "query.generated",
             connection_id=str(connection_id),
             question=request.question,
         )
@@ -63,8 +78,18 @@ class QueryServiceImpl:
         conn = await self._connection_service.get_connection(connection_id)
         executor = self._executor_factory(conn)
         result = await executor.execute(request.sql)
+        async with self._unit_of_work as uow:
+            await uow.history_repository.create(
+                QueryHistory(
+                    connection_id=connection_id,
+                    event_type=QueryEventType.EXECUTE,
+                    sql=request.sql,
+                    row_count=len(result.rows),
+                )
+            )
+            await uow.commit()
         logger.info(
-            "query.sql_executed",
+            "query.executed",
             connection_id=str(connection_id),
             rows=len(result.rows),
         )
