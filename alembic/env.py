@@ -13,8 +13,7 @@ sys.path.append(f"{Path.cwd()}/src")
 from config import settings as settings_config
 from db import Base
 
-# Import all models here so Alembic can detect them for autogenerate:
-# import mymodule.models  # noqa: F401
+import connections.models  # noqa: F401
 
 config = context.config
 

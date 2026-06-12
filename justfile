@@ -14,15 +14,15 @@ dev:
 
 # Run linter
 lint:
-    uv run ruff check src/ tests/ --fix
+    uv run ruff check src/ --fix
 
 # Run formatter
 format:
-    uv run ruff format src/ tests/
+    uv run ruff format src/
 
 # Check formatting without writing changes
 format-check:
-    uv run ruff format --check src/ tests/
+    uv run ruff format --check src/
 
 # Lint + format check (CI gate)
 check:

@@ -14,8 +14,6 @@ class Settings(BaseSettings):
     DATABASE_POOL_TTL: int = 60 * 20
     DATABASE_POOL_PRE_PING: bool = True
 
-    ADMIN_API_KEY: str = "change-me-in-production"
-
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     @property

@@ -6,8 +6,12 @@ from typing import Any, Protocol
 from dependency_injector.wiring import Provide, inject
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from connections.repository import ConnectionRepository, ConnectionRepositoryImpl
+
 
 class UnitOfWork(Protocol):
+    connection_repository: ConnectionRepository
+
     async def __aenter__(self) -> UnitOfWork: ...
 
     async def __aexit__(
@@ -30,6 +34,7 @@ class UnitOfWorkImpl:
 
     async def __aenter__(self) -> UnitOfWork:
         self.session = self._session_factory()
+        self.connection_repository = ConnectionRepositoryImpl(self.session)
         return self
 
     async def __aexit__(
