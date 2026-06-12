@@ -27,6 +27,22 @@ sql_prompt = ChatPromptTemplate.from_messages(
 )
 # input variables: db_type, schema, question
 
+_EXPLAIN_SYSTEM = """\
+You are an expert SQL assistant for {db_type} databases.
+Given the database schema below, explain what the following SQL query does \
+in plain English. Be concise and focus on the business meaning, not the syntax.
+
+Schema:
+{schema}"""
+
+explain_prompt = ChatPromptTemplate.from_messages(
+    [
+        ("system", _EXPLAIN_SYSTEM),
+        ("human", "{sql}"),
+    ]
+)
+# input variables: db_type, schema, sql
+
 
 def format_schema(schema: SchemaResponse) -> str:
     lines: list[str] = []

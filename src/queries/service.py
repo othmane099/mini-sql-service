@@ -11,8 +11,15 @@ from connections.models import Connection
 from connections.service import ConnectionService
 from history.models import QueryEventType, QueryHistory
 from queries.executor import QueryExecutor
-from queries.prompt import format_schema, sql_prompt
-from queries.schemas import ExecuteRequest, ExecuteResponse, QueryRequest, QueryResponse
+from queries.prompt import explain_prompt, format_schema, sql_prompt
+from queries.schemas import (
+    ExecuteRequest,
+    ExecuteResponse,
+    ExplainRequest,
+    ExplainResponse,
+    QueryRequest,
+    QueryResponse,
+)
 from uow import UnitOfWork
 
 logger = structlog.get_logger()
@@ -25,6 +32,9 @@ class QueryService(Protocol):
     async def execute_sql(
         self, connection_id: uuid.UUID, request: ExecuteRequest
     ) -> ExecuteResponse: ...
+    async def explain_sql(
+        self, connection_id: uuid.UUID, request: ExplainRequest
+    ) -> ExplainResponse: ...
 
 
 class QueryServiceImpl:
@@ -70,6 +80,35 @@ class QueryServiceImpl:
             connection_id=str(connection_id),
             question=request.question,
         )
+        return result
+
+    async def explain_sql(
+        self, connection_id: uuid.UUID, request: ExplainRequest
+    ) -> ExplainResponse:
+        conn = await self._connection_service.get_connection(connection_id)
+        schema = await self._connection_service.get_schema(connection_id)
+        chain = explain_prompt | self._llm.with_structured_output(ExplainResponse)
+        result = cast(
+            ExplainResponse,
+            await chain.ainvoke(
+                {
+                    "db_type": conn.db_type.value,
+                    "schema": format_schema(schema),
+                    "sql": request.sql,
+                }
+            ),
+        )
+        async with self._unit_of_work as uow:
+            await uow.history_repository.create(
+                QueryHistory(
+                    connection_id=connection_id,
+                    event_type=QueryEventType.EXPLAIN,
+                    sql=request.sql,
+                    explanation=result.explanation,
+                )
+            )
+            await uow.commit()
+        logger.info("query.explained", connection_id=str(connection_id))
         return result
 
     async def execute_sql(

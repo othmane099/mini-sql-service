@@ -13,6 +13,7 @@ from db import Base
 class QueryEventType(StrEnum):
     GENERATE = "generate"
     EXECUTE = "execute"
+    EXPLAIN = "explain"
 
 
 class QueryHistory(Base):

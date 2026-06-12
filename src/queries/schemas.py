@@ -19,3 +19,11 @@ class ExecuteRequest(BaseModel):
 class ExecuteResponse(BaseModel):
     columns: list[str]
     rows: list[list[object]]
+
+
+class ExplainRequest(BaseModel):
+    sql: str = Field(min_length=1)
+
+
+class ExplainResponse(BaseModel):
+    explanation: str

@@ -11,7 +11,14 @@ from connections.exceptions import (
     IntrospectionError,
 )
 from queries.exceptions import QueryExecutionError
-from queries.schemas import ExecuteRequest, ExecuteResponse, QueryRequest, QueryResponse
+from queries.schemas import (
+    ExecuteRequest,
+    ExecuteResponse,
+    ExplainRequest,
+    ExplainResponse,
+    QueryRequest,
+    QueryResponse,
+)
 from queries.service import QueryService
 
 router = APIRouter(prefix="/connections", tags=["queries"])
@@ -49,3 +56,16 @@ async def execute_sql(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
+
+
+@router.post("/{connection_id}/explain", response_model=ExplainResponse)
+@inject
+async def explain_sql(
+    connection_id: uuid.UUID,
+    request: ExplainRequest,
+    service: QueryService = Depends(Provide["query_service"]),
+) -> ExplainResponse:
+    try:
+        return await service.explain_sql(connection_id, request)
+    except ConnectionNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
