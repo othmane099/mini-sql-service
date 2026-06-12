@@ -6,6 +6,7 @@ from connections.introspector import PostgreSQLIntrospector
 from connections.service import ConnectionServiceImpl
 from db import db_resource
 from llm import create_llm
+from queries.executor import PostgreSQLQueryExecutor
 from queries.service import QueryServiceImpl
 from uow import UnitOfWorkImpl
 
@@ -27,8 +28,11 @@ class Container(containers.DeclarativeContainer):
 
     llm = providers.Singleton(create_llm)
 
+    executor_factory = providers.Factory(PostgreSQLQueryExecutor)
+
     query_service = providers.Factory(
         QueryServiceImpl,
         connection_service=connection_service,
         llm=llm,
+        executor_factory=executor_factory.provider,
     )

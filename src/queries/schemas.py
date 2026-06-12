@@ -10,3 +10,12 @@ class QueryRequest(BaseModel):
 class QueryResponse(BaseModel):
     sql: str
     explanation: str
+
+
+class ExecuteRequest(BaseModel):
+    sql: str = Field(min_length=1)
+
+
+class ExecuteResponse(BaseModel):
+    columns: list[str]
+    rows: list[list[object]]
