@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Protocol
+from urllib.parse import quote
 
 import structlog
 from sqlalchemy import NullPool, text
@@ -26,7 +27,7 @@ class PostgreSQLIntrospector:
 
     def __init__(self, conn: Connection) -> None:
         self._dsn = (
-            f"postgresql+asyncpg://{conn.username}:{conn.password}"
+            f"postgresql+asyncpg://{quote(conn.username, safe='')}:{quote(conn.password, safe='')}"
             f"@{conn.host}:{conn.port}/{conn.database}"
         )
 
