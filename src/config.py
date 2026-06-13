@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "gpt-4o"
     LLM_TIMEOUT: int = 30
 
+    QUERY_MAX_ROWS: int = 1000
+    QUERY_STATEMENT_TIMEOUT: int = 30
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     @property

@@ -7,6 +7,7 @@ from sqlalchemy import NullPool, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from config import settings
 from connections.exceptions import ConnectionFailedError
 from connections.models import Connection, DBType
 from queries.exceptions import QueryExecutionError
@@ -37,10 +38,15 @@ class PostgreSQLQueryExecutor:
         try:
             async with engine.begin() as conn:
                 await conn.execute(text("SET TRANSACTION READ ONLY"))
+                await conn.execute(
+                    text(f"SET statement_timeout = {settings.QUERY_STATEMENT_TIMEOUT * 1000}")
+                )
                 result = await conn.execute(text(sql))
                 columns = list(result.keys())
-                rows = [list(row) for row in result.fetchall()]
-                return ExecuteResponse(columns=columns, rows=rows)
+                raw_rows = result.fetchmany(settings.QUERY_MAX_ROWS + 1)
+                truncated = len(raw_rows) > settings.QUERY_MAX_ROWS
+                rows = [list(row) for row in raw_rows[: settings.QUERY_MAX_ROWS]]
+                return ExecuteResponse(columns=columns, rows=rows, truncated=truncated)
         except OperationalError as exc:
             logger.warning("query.execute.connection_failed", exc_info=exc)
             raise ConnectionFailedError("could not reach the database") from exc

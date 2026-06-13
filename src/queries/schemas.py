@@ -19,6 +19,7 @@ class ExecuteRequest(BaseModel):
 class ExecuteResponse(BaseModel):
     columns: list[str]
     rows: list[list[object]]
+    truncated: bool = False
 
 
 class ExplainRequest(BaseModel):
