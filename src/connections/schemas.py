@@ -1,21 +1,33 @@
 from __future__ import annotations
 
+import ipaddress
 import re
 import uuid
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from config import settings
 from connections.models import DBType
 
 _HOSTNAME_RE = re.compile(
     r"^(?:"
     r"(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)*"
-    r"[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?"  # hostname
-    r"|(?:\d{1,3}\.){3}\d{1,3}"  # IPv4
-    r"|localhost"
+    r"[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?"
     r")$"
 )
+
+# Hostnames that resolve to private/loopback addresses and are never safe in production.
+# localhost is exempted in debug mode to allow local development.
+_BLOCKED_HOSTNAMES = {"localhost"}
+
+
+def _check_ip(value: str) -> bool | None:
+    """Return True if globally routable IP, False if private/reserved, None if not an IP."""
+    try:
+        return ipaddress.ip_address(value).is_global
+    except ValueError:
+        return None
 
 
 class ConnectionCreate(BaseModel):
@@ -42,8 +54,19 @@ class ConnectionCreate(BaseModel):
         v = v.strip()
         if not v:
             raise ValueError("host must not be blank")
+
+        is_global = _check_ip(v)
+        if is_global is not None:
+            if not is_global and not settings.is_debug:
+                raise ValueError("private and reserved IP addresses are not allowed")
+            return v
+
+        if v.lower() in _BLOCKED_HOSTNAMES and not settings.is_debug:
+            raise ValueError("private hostnames are not allowed")
+
         if not _HOSTNAME_RE.match(v):
             raise ValueError(f"'{v}' is not a valid hostname or IP address")
+
         return v
 
 
