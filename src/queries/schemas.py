@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 
 class QueryRequest(BaseModel):
-    question: str = Field(min_length=1)
+    question: str = Field(min_length=1, max_length=2000)
 
 
 class QueryResponse(BaseModel):
@@ -13,7 +13,7 @@ class QueryResponse(BaseModel):
 
 
 class ExecuteRequest(BaseModel):
-    sql: str = Field(min_length=1)
+    sql: str = Field(min_length=1, max_length=8000)
 
 
 class ExecuteResponse(BaseModel):
@@ -22,7 +22,7 @@ class ExecuteResponse(BaseModel):
 
 
 class ExplainRequest(BaseModel):
-    sql: str = Field(min_length=1)
+    sql: str = Field(min_length=1, max_length=8000)
 
 
 class ExplainResponse(BaseModel):
