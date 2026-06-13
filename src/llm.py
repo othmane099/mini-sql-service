@@ -12,4 +12,5 @@ def create_llm() -> BaseChatModel:
         api_key=settings.LLM_API_KEY,
         api_version=settings.LLM_API_VERSION,
         azure_deployment=settings.LLM_MODEL,
+        timeout=settings.LLM_TIMEOUT,
     )

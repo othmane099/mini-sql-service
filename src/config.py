@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     LLM_ENDPOINT: str
     LLM_API_VERSION: str
     LLM_MODEL: str = "gpt-4o"
+    LLM_TIMEOUT: int = 30
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
