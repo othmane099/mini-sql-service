@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
+import structlog
 from sqlalchemy import NullPool, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -11,6 +12,8 @@ from connections.models import Connection, DBType
 from queries.exceptions import QueryExecutionError
 from queries.schemas import ExecuteResponse
 from queries.validator import validate_select_only
+
+logger = structlog.get_logger()
 
 
 class QueryExecutor(Protocol):
@@ -39,8 +42,10 @@ class PostgreSQLQueryExecutor:
                 rows = [list(row) for row in result.fetchall()]
                 return ExecuteResponse(columns=columns, rows=rows)
         except OperationalError as exc:
-            raise ConnectionFailedError(str(exc)) from exc
+            logger.warning("query.execute.connection_failed", exc_info=exc)
+            raise ConnectionFailedError("could not reach the database") from exc
         except Exception as exc:
-            raise QueryExecutionError(str(exc)) from exc
+            logger.error("query.execute.error", exc_info=exc)
+            raise QueryExecutionError("query execution failed") from exc
         finally:
             await engine.dispose()

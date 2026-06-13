@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+import structlog
 from sqlalchemy import NullPool, text
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.engine import Inspector
@@ -11,6 +12,8 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from connections.exceptions import ConnectionFailedError, IntrospectionError
 from connections.models import Connection
 from connections.schemas import ColumnInfo, TableInfo, TestConnectionResponse
+
+logger = structlog.get_logger()
 
 
 class DBIntrospector(Protocol):
@@ -34,7 +37,8 @@ class PostgreSQLIntrospector:
                 await conn.execute(text("SELECT 1"))
             return TestConnectionResponse(success=True, message="Connection successful")
         except Exception as exc:
-            return TestConnectionResponse(success=False, message=str(exc))
+            logger.warning("connection.test.failed", exc_info=exc)
+            return TestConnectionResponse(success=False, message="Connection failed")
         finally:
             await engine.dispose()
 
@@ -44,9 +48,11 @@ class PostgreSQLIntrospector:
             async with engine.connect() as conn:
                 return await conn.run_sync(self._read_sync)
         except OperationalError as exc:
-            raise ConnectionFailedError(str(exc)) from exc
+            logger.warning("connection.introspect.failed", exc_info=exc)
+            raise ConnectionFailedError("could not reach the database") from exc
         except Exception as exc:
-            raise IntrospectionError(str(exc)) from exc
+            logger.error("connection.introspect.error", exc_info=exc)
+            raise IntrospectionError("failed to read database schema") from exc
         finally:
             await engine.dispose()
 
