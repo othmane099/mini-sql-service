@@ -10,6 +10,7 @@ from langchain_core.language_models import BaseChatModel
 from connections.models import Connection
 from connections.service import ConnectionService
 from history.models import QueryEventType, QueryHistory
+from queries.exceptions import QueryExecutionError
 from queries.executor import QueryExecutor
 from queries.prompt import explain_prompt, format_schema, sql_prompt
 from queries.schemas import (
@@ -20,6 +21,7 @@ from queries.schemas import (
     QueryRequest,
     QueryResponse,
 )
+from queries.validator import validate_select_only
 from uow import UnitOfWork
 
 logger = structlog.get_logger()
@@ -64,6 +66,11 @@ class QueryServiceImpl:
                 }
             ),
         )
+        try:
+            validate_select_only(result.sql, conn.db_type)
+        except QueryExecutionError as exc:
+            logger.warning("query.generate.invalid_output", sql=result.sql, exc_info=exc)
+            raise
         async with self._unit_of_work as uow:
             await uow.history_repository.create(
                 QueryHistory(
