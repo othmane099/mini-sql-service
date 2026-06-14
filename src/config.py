@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     CORS_ORIGINS: str = "*"
 
+    BASE_URL: str = "http://localhost:8000"
+
     DATABASE_URL: str
     DATABASE_POOL_SIZE: int = 5
     DATABASE_POOL_TTL: int = 60 * 20
@@ -19,6 +21,8 @@ class Settings(BaseSettings):
     LLM_API_VERSION: str
     LLM_MODEL: str = "gpt-4o"
     LLM_TIMEOUT: int = 30
+    LLM_MAX_TOKENS_SQL: int = 512  # short SELECT statements
+    LLM_MAX_TOKENS_AGENT: int = 1024  # conversational replies
 
     QUERY_MAX_ROWS: int = 1000
     QUERY_STATEMENT_TIMEOUT: int = 30

@@ -1,8 +1,18 @@
 from __future__ import annotations
 
+import warnings
+
 import structlog
 
 from config import settings
+
+# LangChain's with_structured_output emits a spurious Pydantic serialization
+# warning when used inside astream_events; the parsed output is still correct.
+warnings.filterwarnings(
+    "ignore",
+    message=".*PydanticSerializationUnexpectedValue.*",
+    category=UserWarning,
+)
 
 # Avoid importing stdlib `logging` — this filename shadows it on sys.path.
 _LEVELS: dict[str, int] = {

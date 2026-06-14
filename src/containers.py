@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dependency_injector import containers, providers
 
+from checkpointer import create_checkpointer
 from connections.introspector import PostgreSQLIntrospector
 from connections.service import ConnectionServiceImpl
 from db import db_resource
@@ -13,7 +14,9 @@ from uow import UnitOfWorkImpl
 
 
 class Container(containers.DeclarativeContainer):
-    wiring_config = containers.WiringConfiguration(packages=["connections", "queries", "history"])
+    wiring_config = containers.WiringConfiguration(
+        packages=["connections", "queries", "history", "chart_agent"]
+    )
 
     session_factory = providers.Resource(db_resource)
 
@@ -28,6 +31,8 @@ class Container(containers.DeclarativeContainer):
     )
 
     llm = providers.Singleton(create_llm)
+
+    checkpointer = providers.Resource(create_checkpointer)
 
     executor_factory = providers.Factory(PostgreSQLQueryExecutor)
 
