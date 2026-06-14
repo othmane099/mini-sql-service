@@ -6,18 +6,14 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Annotated, cast
+from typing import Annotated
 
 import httpx
-from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool, tool
+from langgraph.graph.state import CompiledStateGraph
 
-from config import settings
 from connections.service import ConnectionService
-from queries.executor import PostgreSQLQueryExecutor
-from queries.prompt import format_schema, sql_prompt
-from queries.schemas import QueryResponse
+from queries.prompt import format_schema
 
 CHARTS_DIR = Path("charts")
 
@@ -33,80 +29,12 @@ class _Encoder(json.JSONEncoder):
         return super().default(o)
 
 
-_CHART_SYSTEM = """\
-You are an expert data visualization engineer specializing in Chart.js v4.
-Given a dataset and a chart description, generate a complete, self-contained HTML page \
-that renders a polished, production-quality chart.
-
-## Output rules
-- Output ONLY raw HTML. No markdown, no code fences, no explanation, no comments outside the HTML.
-- The page must be fully self-contained — only external dependency allowed is Chart.js from CDN.
-- Use: <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-- Embed all data directly as JavaScript variables inside a <script> tag.
-- The page must end with </html>.
-
-## Chart type selection
-Choose the most appropriate type for the data and description:
-- **bar** — comparisons across categories (use `indexAxis: 'y'` for horizontal bars)
-- **line** — trends over time; set `tension: 0.4` for smooth curves, `fill: true` for area charts
-- **pie / doughnut** — part-to-whole relationships (doughnut is more readable)
-- **scatter** — correlations between two numeric variables
-- **bubble** — three-variable relationships (x, y, size)
-- **radar** — multivariate comparisons across a common scale
-- **polarArea** — similar to pie but each segment has equal angle, area encodes value
-- Mixed charts are allowed: combine bar + line by setting `type` per dataset
-
-## Styling requirements
-- Page: white background (`#ffffff`), centered layout, generous padding (48px),
-  `font-family: 'Segoe UI', system-ui, sans-serif`
-- Canvas container: max-width 860px, margin auto,
-  box-shadow `0 4px 24px rgba(0,0,0,0.08)`, border-radius 16px, padding 32px
-- Use a modern color palette — avoid default grey. Suggested palette:
-  `['#6366f1','#f59e0b','#10b981','#3b82f6','#ef4444','#8b5cf6','#ec4899','#14b8a6']`
-- For line/area charts: set `borderWidth: 2`, `pointRadius: 4`, `pointHoverRadius: 6`
-- For bar charts: set `borderRadius: 6` on datasets for rounded bars
-- Background colors should be the same hue at 15-20% opacity for fill areas
-
-## Plugin configuration (always include)
-```
-plugins: {
-  legend: {
-    position: 'bottom',
-    labels: { padding: 20, usePointStyle: true, font: { size: 13 } }
-  },
-  title: {
-    display: true,
-    text: '<descriptive title matching the user request>',
-    font: { size: 18, weight: 'bold' },
-    padding: { bottom: 24 }
-  },
-  tooltip: {
-    backgroundColor: 'rgba(17,24,39,0.9)',
-    titleFont: { size: 13 },
-    bodyFont: { size: 12 },
-    padding: 12,
-    cornerRadius: 8
-  }
-}
-```
-
-## Scale configuration (for cartesian charts)
-- Enable gridlines with low opacity: `grid: { color: 'rgba(0,0,0,0.06)' }`
-- Use `ticks: { font: { size: 12 }, color: '#6b7280' }` on both axes
-- Add axis titles when column names are not self-explanatory
-
-## Animation
-- Enable default animations (do not disable them)
-- For large datasets (>100 points), set `animation: false` for performance
-
-## Responsiveness
-- Always set `responsive: true` and `maintainAspectRatio: true` on the chart options
-- Set the canvas container to `width: 100%`"""
-
-
-def make_tools(service: ConnectionService, llm: BaseChatModel) -> list[BaseTool]:
-    """Build agent tools with services captured in closures."""
-    CHARTS_DIR.mkdir(exist_ok=True)
+def make_tools(
+    service: ConnectionService,
+    sql_graph: CompiledStateGraph,
+    chart_graph: CompiledStateGraph,
+) -> list[BaseTool]:
+    """Build agent tools with services and subgraphs captured in closures."""
 
     @tool
     async def list_connections() -> str:
@@ -133,52 +61,51 @@ def make_tools(service: ConnectionService, llm: BaseChatModel) -> list[BaseTool]
             return f"Unexpected error reading schema: {exc}"
 
     @tool
-    async def generate_sql(
+    async def run_sql(
         connection_id: Annotated[str, "UUID of the connection"],
         question: Annotated[str, "Natural language question to answer with SQL"],
     ) -> str:
-        """Generate a SELECT SQL query from a natural language question."""
-        schema = await service.get_schema(uuid.UUID(connection_id))
-        conn = await service.get_connection(uuid.UUID(connection_id))
-        chain = sql_prompt | llm.bind(
-            max_tokens=settings.LLM_MAX_TOKENS_SQL
-        ).with_structured_output(QueryResponse)
-        result = cast(
-            QueryResponse,
-            await chain.ainvoke(
-                {
-                    "db_type": conn.db_type.value,
-                    "schema": format_schema(schema),
-                    "question": question,
-                }
-            ),
-        )
-        return result.sql
+        """Generate and execute a SQL query from a natural language question.
 
-    @tool
-    async def execute_sql(
-        connection_id: Annotated[str, "UUID of the connection"],
-        sql: Annotated[str, "SELECT SQL query to execute"],
-    ) -> str:
-        """Execute a SELECT SQL query and return results as JSON."""
-        from queries.exceptions import QueryExecutionError
+        Automatically retries with error feedback if execution fails (up to 3 attempts).
+        Returns JSON with columns, rows, and the final SQL on success, or an error message.
+        """
+        from connections.exceptions import ConnectionNotFoundError
 
         try:
+            schema = await service.get_schema(uuid.UUID(connection_id))
             conn = await service.get_connection(uuid.UUID(connection_id))
-            executor = PostgreSQLQueryExecutor(conn)
-            result = await executor.execute(sql)
-            return json.dumps(
-                {
-                    "columns": result.columns,
-                    "rows": result.rows,
-                    "truncated": result.truncated,
-                },
-                cls=_Encoder,
-            )
-        except QueryExecutionError as exc:
-            return f"Query failed: {exc}"
+        except ConnectionNotFoundError:
+            return f"Connection {connection_id} not found."
         except Exception as exc:
-            return f"Unexpected error executing query: {exc}"
+            return f"Could not retrieve connection info: {exc}"
+
+        result = await sql_graph.ainvoke(
+            {
+                "connection_id": connection_id,
+                "question": question,
+                "schema": format_schema(schema),
+                "db_type": conn.db_type.value,
+                "sql": "",
+                "attempts": 0,
+                "error": "",
+                "columns": [],
+                "rows": [],
+                "messages": [],
+            }
+        )
+
+        if result["error"]:
+            return f"SQL execution failed after {result['attempts']} attempt(s): {result['error']}"
+
+        return json.dumps(
+            {
+                "columns": result["columns"],
+                "rows": result["rows"],
+                "sql": result["sql"],
+            },
+            cls=_Encoder,
+        )
 
     @tool
     async def generate_chart(
@@ -198,28 +125,26 @@ def make_tools(service: ConnectionService, llm: BaseChatModel) -> list[BaseTool]
         - To modify an existing chart: pass the chart_id from the previous generate_chart result.
           The file is overwritten and the same URL remains valid.
         """
-        dataset = json.dumps({"columns": columns, "rows": rows}, indent=2)
-        prompt = f"Chart description: {description}\n\nDataset:\n{dataset}"
-        response = await llm.ainvoke(
-            [
-                SystemMessage(content=_CHART_SYSTEM),
-                HumanMessage(content=prompt),
-            ]
+        result = await chart_graph.ainvoke(
+            {
+                "columns": columns,
+                "rows": rows,
+                "description": description,
+                "chart_id": chart_id,
+                "plan": "",
+                "html": "",
+                "attempts": 0,
+                "validation_errors": [],
+                "final_chart_id": "",
+                "chart_url": "",
+                "error": "",
+            }
         )
-        content = response.content
-        raw = content if isinstance(content, str) else content[0]
 
-        idx = raw.lower().rfind("</html>")
-        if idx == -1:
-            return (
-                "Chart generation failed: response was truncated before the HTML "
-                "could be completed. Try again."
-            )
-        html = raw[: idx + len("</html>")].strip()
+        if result["error"]:
+            return result["error"]
 
-        cid = chart_id if chart_id else uuid.uuid4().hex
-        (CHARTS_DIR / f"{cid}.html").write_text(html, encoding="utf-8")
-        return f"chart_id={cid} url={settings.BASE_URL}/api/v1/agent/charts/{cid}"
+        return f"chart_id={result['final_chart_id']} url={result['chart_url']}"
 
     @tool
     async def read_chart(
@@ -291,8 +216,7 @@ def make_tools(service: ConnectionService, llm: BaseChatModel) -> list[BaseTool]
     return [
         list_connections,
         get_schema,
-        generate_sql,
-        execute_sql,
+        run_sql,
         generate_chart,
         read_chart,
         fetch_chartjs_docs,
