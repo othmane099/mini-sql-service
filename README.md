@@ -4,6 +4,11 @@
 
 mini-sql-service lets you connect to a database and interact with it using plain English. Ask questions, get SQL, and generate interactive charts — all through a REST API and a conversational AI agent.
 
+A ready-made frontend is available at **[mini-sql-service-frontend](https://github.com/othmane099/mini-sql-service-frontend)**.
+
+![AI SQL Agent - chart generation](img/ai_sql_agent1.png)
+![AI SQL Agent - query interface](img/ai_sql_agent2.png)
+
 ## Architecture
 
 The service is built around three layers:

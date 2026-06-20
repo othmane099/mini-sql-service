@@ -43,7 +43,7 @@ class QueryServiceImpl:
     def __init__(
         self,
         connection_service: ConnectionService,
-        unit_of_work: UnitOfWork,
+        unit_of_work: Callable[[], UnitOfWork],
         llm: BaseChatModel,
         executor_factory: Callable[[Connection], QueryExecutor],
     ) -> None:
@@ -71,7 +71,7 @@ class QueryServiceImpl:
         except QueryExecutionError as exc:
             logger.warning("query.generate.invalid_output", sql=result.sql, exc_info=exc)
             raise
-        async with self._unit_of_work as uow:
+        async with await self._unit_of_work() as uow:
             await uow.history_repository.create(
                 QueryHistory(
                     connection_id=connection_id,
@@ -105,7 +105,7 @@ class QueryServiceImpl:
                 }
             ),
         )
-        async with self._unit_of_work as uow:
+        async with await self._unit_of_work() as uow:
             await uow.history_repository.create(
                 QueryHistory(
                     connection_id=connection_id,
@@ -124,7 +124,7 @@ class QueryServiceImpl:
         conn = await self._connection_service.get_connection(connection_id)
         executor = self._executor_factory(conn)
         result = await executor.execute(request.sql)
-        async with self._unit_of_work as uow:
+        async with await self._unit_of_work() as uow:
             await uow.history_repository.create(
                 QueryHistory(
                     connection_id=connection_id,

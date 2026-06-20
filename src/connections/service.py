@@ -27,25 +27,25 @@ class ConnectionService(Protocol):
 class ConnectionServiceImpl:
     def __init__(
         self,
-        unit_of_work: UnitOfWork,
+        unit_of_work: Callable[[], UnitOfWork],
         introspector_factory: Callable[[Connection], DBIntrospector],
     ) -> None:
         self._unit_of_work = unit_of_work
         self._introspector_factory = introspector_factory
 
     async def list_connections(self) -> list[Connection]:
-        async with self._unit_of_work as uow:
+        async with await self._unit_of_work() as uow:
             return await uow.connection_repository.list_all()
 
     async def get_connection(self, connection_id: uuid.UUID) -> Connection:
-        async with self._unit_of_work as uow:
+        async with await self._unit_of_work() as uow:
             conn = await uow.connection_repository.get_by_id(connection_id)
             if conn is None:
                 raise ConnectionNotFoundError(connection_id)
             return conn
 
     async def create_connection(self, data: ConnectionCreate) -> Connection:
-        async with self._unit_of_work as uow:
+        async with await self._unit_of_work() as uow:
             if await uow.connection_repository.get_by_name(data.name) is not None:
                 raise ConnectionNameConflictError(data.name)
             conn = Connection(
@@ -63,7 +63,7 @@ class ConnectionServiceImpl:
             return conn
 
     async def delete_connection(self, connection_id: uuid.UUID) -> None:
-        async with self._unit_of_work as uow:
+        async with await self._unit_of_work() as uow:
             conn = await uow.connection_repository.get_by_id(connection_id)
             if conn is None:
                 raise ConnectionNotFoundError(connection_id)
@@ -72,7 +72,7 @@ class ConnectionServiceImpl:
             logger.info("connection.deleted", connection_id=str(connection_id))
 
     async def get_schema(self, connection_id: uuid.UUID) -> SchemaResponse:
-        async with self._unit_of_work as uow:
+        async with await self._unit_of_work() as uow:
             conn = await uow.connection_repository.get_by_id(connection_id)
             if conn is None:
                 raise ConnectionNotFoundError(connection_id)
@@ -91,7 +91,7 @@ class ConnectionServiceImpl:
         )
 
     async def test_connection(self, connection_id: uuid.UUID) -> TestConnectionResponse:
-        async with self._unit_of_work as uow:
+        async with await self._unit_of_work() as uow:
             conn = await uow.connection_repository.get_by_id(connection_id)
             if conn is None:
                 raise ConnectionNotFoundError(connection_id)

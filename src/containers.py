@@ -26,7 +26,7 @@ class Container(containers.DeclarativeContainer):
 
     connection_service = providers.Factory(
         ConnectionServiceImpl,
-        unit_of_work=unit_of_work,
+        unit_of_work=unit_of_work.provider,
         introspector_factory=introspector_factory.provider,
     )
 
@@ -39,7 +39,7 @@ class Container(containers.DeclarativeContainer):
     query_service = providers.Factory(
         QueryServiceImpl,
         connection_service=connection_service,
-        unit_of_work=unit_of_work,
+        unit_of_work=unit_of_work.provider,
         llm=llm,
         executor_factory=executor_factory.provider,
     )
